@@ -1,16 +1,22 @@
 /*
 * Christmas led strip 
 * authors: HUON Nicolas, SORIN Aimeric, LECAT Baptiste, OLLIVIER Dimitri
-* last-modification: 06/01/2023
+* last-modification: 23/01/2023
 */
 
 #include "FastLED.h"
+#include "ArduinoBLE.h"
 #define NUM_LEDS 144
 #define LED_PIN A3
 #define BUTTON_ON_OFF_PIN A1
 #define BUTTON_PROG_PIN A2
 #define POTENTIOMETER_BRIGTHNESS_PIN A4
 #define POTENTIOMETER_RATE_PIN A5
+#define BLUETOOTH_DEVICE_NAME "ViveLaBiere♥️"
+
+BLEService newService("180A"); // creating the service
+BLEUnsignedCharCharacteristic randomReading("2A58", BLERead | BLENotify); // creating the Analog Value characteristic
+BLEByteCharacteristic switchChar("2A57", BLERead | BLEWrite); // creating the LED characteristic
 
 // define LEDs
 CRGB leds[NUM_LEDS];
@@ -39,11 +45,41 @@ void setup() {
 
   // init LEDs
   FastLED.addLeds<NEOPIXEL, LED_PIN>(leds, NUM_LEDS);
-
   LEDS.showColor(CRGB(0, 0, 0));
   LEDS.setBrightness(ledBrightness);
+  
+  // init bluetooth
+  initBluetooth();
+
   Serial.begin(9600);
-  Serial.println("Start here!");
+}
+
+void initBluetooth() {
+  //init ArduinoBLE library
+  if (!BLE.begin()) {
+    // catch if init fail
+    Serial.println("starting Bluetooth® Low Energy failed!");
+    while (1);
+  }
+
+  // setting a name that will appear when scanning for Bluetooth® devices
+  BLE.setLocalName(BLUETOOTH_DEVICE_NAME);
+  BLE.setAdvertisedService(newService);
+  
+  // add characteristics to a service
+  newService.addCharacteristic(switchChar); 
+  newService.addCharacteristic(randomReading);
+  
+  // add the service
+  BLE.addService(newService);  
+  
+  // set initial value for characteristics
+  switchChar.writeValue(0); 
+  randomReading.writeValue(0);
+
+  // start advertising the service 
+  BLE.advertise();
+  Serial.println(" Bluetooth® device active, waiting for connections...");
 }
 
 void loop() {
@@ -92,6 +128,15 @@ void loop() {
 
 LEDS.setBrightness(analogRead(POTENTIOMETER_BRIGTHNESS_PIN) / 10);
 ledRate = (analogRead(POTENTIOMETER_RATE_PIN) * 10); 
+
+BLEDevice central = BLE.central(); // wait for a Bluetooth® Low Energy central
+
+  if (central) {  // if a central is connected to the peripheral
+  
+    Serial.print(switchChar.read());
+  }
+
+  delay(2000);
 }
 
 void reset() {
